@@ -14,7 +14,7 @@
 (test :write-signature-with-no-identity
   "Writes signature for socket where no identity has been set"
   (is (equalp (with-fixture dummy-out-stream ()
-                  (nilmq::write-signature stream))
+                (nilmq::write-signature stream))
               #(#xff 0 0 0 0 0 0 0 1 #x7f))))
 
 (test :write-signature-with-minimum-identity-length
@@ -102,8 +102,8 @@
 (test :write-large-body-length-too-long
   "Test the WRITE-LARGE-BODY-LENGTH function with too large of a large message length value"
   (signals nilmq::message-body-too-long-error
-      (with-fixture dummy-out-stream ()
-        (nilmq::write-large-body-length (expt 2 64) stream))))
+    (with-fixture dummy-out-stream ()
+      (nilmq::write-large-body-length (expt 2 64) stream))))
 
 (test :write-frame-with-min-length-long-body
   "Write frame with minimum length for a long body message"
@@ -137,12 +137,12 @@
 (test :read-length-from-octets-test-reading-eigth-octets
   "Test READ-LENGTH-FROM-OCTETS reading eight octets"
   (is (= (nilmq::read-length-from-octets #(255 255 255 255 255 255 255 255) 0 8)
-		 (1- (expt 2 64)))))
+         (1- (expt 2 64)))))
 
 (test :read-length-from-octets-test-reading-octets-from-non-zero-start
   "Test READ-LENGTH-FROM-OCTETS reading octets from non zero start in sequence"
   (is (= (nilmq::read-length-from-octets #(255 255 255 255 255 255 255 255) 2 3)
-		 (1- (expt 2 24)))))
+         (1- (expt 2 24)))))
 
 
 (test :read-signature-with-zero-length-identity
@@ -159,74 +159,74 @@
 
 (test :read-signature-with-invalid-identity-length
   "Read signature with invalid identity length"
-  (signals nilmq::invalid-signature-error 
-	  (with-fixture dummy-in-stream (#(#xff 0 0 0 0 0 0 2 0 #x7f))
-		(nilmq::read-signature stream))))
+  (signals nilmq::invalid-signature-error
+    (with-fixture dummy-in-stream (#(#xff 0 0 0 0 0 0 2 0 #x7f))
+      (nilmq::read-signature stream))))
 
 (test :read-signature-with-invalid-identity-length-of-zero
   "Read signature with invalid identity length of zero"
-  (signals nilmq::invalid-signature-error 
-	  (with-fixture dummy-in-stream (#(#xff 0 0 0 0 0 0 0 0 #x7f))
-		(nilmq::read-signature stream))))
+  (signals nilmq::invalid-signature-error
+    (with-fixture dummy-in-stream (#(#xff 0 0 0 0 0 0 0 0 #x7f))
+      (nilmq::read-signature stream))))
 
 (test :read-signature-with-invalid-lead-octet
   "Read signature with invalid lead octet (#xFF)"
-  (signals nilmq::invalid-signature-error 
-	  (with-fixture dummy-in-stream (#(#xf0 0 0 0 0 0 0 1 0 #x7f))
-		(nilmq::read-signature stream))))
+  (signals nilmq::invalid-signature-error
+    (with-fixture dummy-in-stream (#(#xf0 0 0 0 0 0 0 1 0 #x7f))
+      (nilmq::read-signature stream))))
 
 (test :read-signature-with-invalid-trailing-octet
   "Read signature with invalid lead octet (#xFF)"
-  (signals nilmq::invalid-signature-error 
-	  (with-fixture dummy-in-stream (#(#xff 0 0 0 0 0 0 1 0 #x0f))
-		(nilmq::read-signature stream))))
+  (signals nilmq::invalid-signature-error
+    (with-fixture dummy-in-stream (#(#xff 0 0 0 0 0 0 1 0 #x0f))
+      (nilmq::read-signature stream))))
 
 (test :read-identity-of-zero-length-check-identity
   "Read zero length identity checking identity"
   (is (multiple-value-bind (identity length)
-		  (with-fixture dummy-in-stream (#(0 0))
-			(nilmq::read-identity stream))
-		(declare (ignore length))
-		(equalp identity #()))))
+          (with-fixture dummy-in-stream (#(0 0))
+            (nilmq::read-identity stream))
+        (declare (ignore length))
+        (equalp identity #()))))
 
 (test :read-identity-of-zero-length-check-length
   "Read zero length identity checking length"
   (is (multiple-value-bind (identity length)
-		  (with-fixture dummy-in-stream (#(0 0))
-			(nilmq::read-identity stream))
-		(declare (ignore identity))
-		(zerop length))))
+          (with-fixture dummy-in-stream (#(0 0))
+            (nilmq::read-identity stream))
+        (declare (ignore identity))
+        (zerop length))))
 
 (test :read-identity-with-identity-check-identity
   "Read identity with non-zero length identity"
   (is (multiple-value-bind (identity length)
-		  (with-fixture dummy-in-stream (#(0 3 65 65 65))
-			(nilmq::read-identity stream))
-		(declare (ignore length))
-		(equalp identity #(65 65 65)))))
+          (with-fixture dummy-in-stream (#(0 3 65 65 65))
+            (nilmq::read-identity stream))
+        (declare (ignore length))
+        (equalp identity #(65 65 65)))))
 
 (test :read-identity-with-identity-check-length
   "Read non-zero length identity checking length"
   (is (multiple-value-bind (identity length)
-		  (with-fixture dummy-in-stream (#(0 3 65 65 65))
-			(nilmq::read-identity stream))
-		(declare (ignore identity))
-		(= length 3))))
+          (with-fixture dummy-in-stream (#(0 3 65 65 65))
+            (nilmq::read-identity stream))
+        (declare (ignore identity))
+        (= length 3))))
 
 (test :read-identity-with-invalid-length
   "Read identity with invalid length"
-  (signals nilmq::invalid-identity-error 
-   (with-fixture dummy-in-stream (#(0 4 65 65 65))
-	 (nilmq::read-identity stream))))
+  (signals nilmq::invalid-identity-error
+    (with-fixture dummy-in-stream (#(0 4 65 65 65))
+      (nilmq::read-identity stream))))
 
 (test :read-identity-with-invalid-final-short
   "Read identity with invalid final short"
-  (signals nilmq::invalid-identity-error 
-   (with-fixture dummy-in-stream (#(1 3 65 65 65))
-	 (nilmq::read-identity stream))))
+  (signals nilmq::invalid-identity-error
+    (with-fixture dummy-in-stream (#(1 3 65 65 65))
+      (nilmq::read-identity stream))))
 
 (test :read-identity-with-invalid-final-short-too-short
   "Read identity with too short final short"
-  (signals nilmq::invalid-identity-error 
-   (with-fixture dummy-in-stream (#(0))
-	 (nilmq::read-identity stream))))
+  (signals nilmq::invalid-identity-error
+    (with-fixture dummy-in-stream (#(0))
+      (nilmq::read-identity stream))))

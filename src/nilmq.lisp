@@ -102,7 +102,7 @@
     (let ((identity-length (read-length-from-octets sig 1 8)))
       (assert (and (>= identity-length 1)
                    (<= identity-length 256))
-			  nil 'invalid-signature-error))
+              nil 'invalid-signature-error))
     sig))
 
 (defun read-revision (stream)
@@ -113,15 +113,15 @@
 
 (defun read-identity (stream)
   (let ((final-short (make-array 2 :element-type '(unsigned-byte 8))))
-	(assert (= (read-sequence final-short stream) 2) 
-			nil 'invalid-identity-error)
-	(assert (zerop (aref final-short 0)) nil 'invalid-identity-error)
-	(let* ((identity-length (aref final-short 1))
-		   (identity (make-array identity-length 
-								 :element-type '(unsigned-byte 8))))
-	  (assert (= (read-sequence identity stream) identity-length)
-			  nil 'invalid-identity-error)
-	  (values identity identity-length))))
+    (assert (= (read-sequence final-short stream) 2)
+            nil 'invalid-identity-error)
+    (assert (zerop (aref final-short 0)) nil 'invalid-identity-error)
+    (let* ((identity-length (aref final-short 1))
+           (identity (make-array identity-length
+                                 :element-type '(unsigned-byte 8))))
+      (assert (= (read-sequence identity stream) identity-length)
+              nil 'invalid-identity-error)
+      (values identity identity-length))))
 
 (defun read-frame (stream)
   (let* ((flags (read-byte stream))
