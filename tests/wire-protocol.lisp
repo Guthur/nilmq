@@ -230,3 +230,83 @@
   (signals nilmq::invalid-identity-error
     (with-fixture dummy-in-stream (#(0))
       (nilmq::read-identity stream))))
+
+(test :read-zero-length-frame
+  "Read zero length frame"
+  (multiple-value-bind (body length more?)
+      (with-fixture dummy-in-stream (#(0 0))
+        (nilmq::read-frame stream))
+    (is (equalp body #()))
+    (is (= length 0))
+    (is (null more?))))
+
+(test :read-zero-length-frame-with-more-flag
+  "Read zero length frame with more flag"
+  (multiple-value-bind (body length more?)
+      (with-fixture dummy-in-stream (#(1 0))
+        (nilmq::read-frame stream))
+    (is (equalp body #()))
+    (is (= length 0))
+    (is (eq more? t))))
+
+(test :read-short-frame
+  "Read short frame"
+  (multiple-value-bind (body length more?)
+      (with-fixture dummy-in-stream (#(0 1 42))
+        (nilmq::read-frame stream))
+    (is (equalp body #(42)))
+    (is (= length 1))
+    (is (null more?))))
+
+(test :read-short-frame-with-more-flag
+  "Read short frame with more flag"
+  (multiple-value-bind (body length more?)
+      (with-fixture dummy-in-stream (#(1 1 42))
+        (nilmq::read-frame stream))
+    (is (equalp body #(42)))
+    (is (= length 1))
+    (is (eq more? t))))
+
+(test :read-long-frame
+  "Read long frame"
+  (let ((in-data (make-array 265 :initial-element 1 :element-type '(unsigned-byte 8))))
+    (setf (aref in-data 0) 2
+          (aref in-data 1) 0
+          (aref in-data 2) 0
+          (aref in-data 3) 0
+          (aref in-data 4) 0
+          (aref in-data 5) 0
+          (aref in-data 6) 0
+          (aref in-data 7) 1
+          (aref in-data 8) 0)
+    (multiple-value-bind (body length more?)
+        (with-fixture dummy-in-stream (in-data)
+          (nilmq::read-frame stream))
+      (is (equalp body (make-array 256 :initial-element 1 :element-type '(unsigned-byte 8))))
+      (is (= length 256))
+      (is (null more?)))))
+
+(test :read-long-frame-with-more-flag
+  "Read long frame with more flag"
+  (let ((in-data (make-array 265 :initial-element 1 :element-type '(unsigned-byte 8))))
+    (setf (aref in-data 0) 3
+          (aref in-data 1) 0
+          (aref in-data 2) 0
+          (aref in-data 3) 0
+          (aref in-data 4) 0
+          (aref in-data 5) 0
+          (aref in-data 6) 0
+          (aref in-data 7) 1
+          (aref in-data 8) 0)
+    (multiple-value-bind (body length more?)
+        (with-fixture dummy-in-stream (in-data)
+          (nilmq::read-frame stream))
+      (is (equalp body (make-array 256 :initial-element 1 :element-type '(unsigned-byte 8))))
+      (is (= length 256))
+      (is (eq more? t)))))
+
+(test :read-frame-with-non-zero-reserved-flags
+  "Read frame with non zero reserved flags"
+  (signals nilmq::invalid-frame-error
+    (with-fixture dummy-in-stream (#(#xfc 1 #xff))
+      (nilmq::read-frame stream))))

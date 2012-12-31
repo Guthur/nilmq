@@ -48,6 +48,7 @@
 (define-condition invalid-socket-id-error (error) nil)
 (define-condition invalid-signature-error (error) nil)
 (define-condition invalid-identity-error (error) nil)
+(define-condition invalid-frame-error (error) nil)
 (define-condition message-body-too-long-error (error) nil)
 
 (defun write-signature (stream &optional (identity-length 0))
@@ -124,15 +125,20 @@
       (values identity identity-length))))
 
 (defun read-frame (stream)
-  (let* ((flags (read-byte stream))
-         (more? (= (boole boole-and flags *more-frames-flag*) 1))
-         (long? (= (boole boole-and flags *long-message-flag*) 1))
-         (length (if long?
-                     nil
-                     (read-byte stream)))
-         (body (make-array length :element-type '(unsigned-byte 8))))
-    (assert (= (read-sequence body stream) length))
-    (values body length more?)))
+  (let ((flags (read-byte stream)))
+    (assert (zerop (boole boole-and flags #xfc)) nil 'invalid-frame-error)
+    (let* ((more? (= (boole boole-and flags *more-frames-flag*)
+                     *more-frames-flag*))
+           (long? (= (boole boole-and flags *long-message-flag*)
+                     *long-message-flag*))
+           (length (if long?
+                       (let ((seq (make-array 8 :element-type '(unsigned-byte 8))))
+                         (assert (= (read-sequence seq stream) 8) nil 'invalid-frame-error)
+                         (read-length-from-octets seq 0 8))
+                       (read-byte stream)))
+           (body (make-array length :element-type '(unsigned-byte 8))))
+      (assert (= (read-sequence body stream) length) nil 'invalid-frame-error)
+      (values body length more?))))
 
 (defun test-run (str)
   (format t ">~x~%" (read-signature str))
