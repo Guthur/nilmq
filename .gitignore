@@ -1,4 +1,5 @@
 *.fasl
+*.64ufasl
 *.o
 *.so
 *~
