@@ -20,7 +20,7 @@
           :do (push (cons (car socket-type) id) socket-values)
           :finally (setf max-socket-id id))
 
-       (defun valid-socket-type-p (socket-id)
+       (defun valid-socket-id-p (socket-id)
          (and (>= socket-id 0) (<= socket-id ,max-socket-id)))
 
        (defparameter *socket-assoc-list*
@@ -46,6 +46,8 @@
 
 (define-condition invalid-identity-length-error (error) nil)
 (define-condition invalid-socket-id-error (error) nil)
+(define-condition invalid-signature-error (error) nil)
+(define-condition invalid-identity-error (error) nil)
 (define-condition message-body-too-long-error (error) nil)
 
 (defun write-signature (stream &optional (identity-length 0))
@@ -61,7 +63,7 @@
   (force-output stream))
 
 (defun write-revision-and-socket-type (stream revision socket-type)
-  (assert (valid-socket-p socket-type) nil 'invalid-socket-id-error)
+  (assert (valid-socket-id-p socket-type) nil 'invalid-socket-id-error)
   (write-byte revision stream)
   (write-byte socket-type stream)
   (force-output stream))
@@ -94,12 +96,13 @@
 
 (defun read-signature (stream)
   (let ((sig (make-array 10 :element-type '(unsigned-byte 8))))
-    (assert (= (read-sequence sig stream) 10))
-    (assert (= (aref sig 0) #xff))
-    (assert (= (aref sig 9) #x7f))
+    (assert (= (read-sequence sig stream) 10) nil 'invalid-signature-error)
+    (assert (= (aref sig 0) #xff) nil 'invalid-signature-error)
+    (assert (= (aref sig 9) #x7f) nil 'invalid-signature-error)
     (let ((identity-length (read-length-from-octets sig 1 8)))
       (assert (and (>= identity-length 1)
-                   (<= identity-length 256))))
+                   (<= identity-length 256))
+			  nil 'invalid-signature-error))
     sig))
 
 (defun read-revision (stream)
@@ -109,11 +112,16 @@
   (read-byte stream))
 
 (defun read-identity (stream)
-  (assert (zerop (read-byte stream)))
-  (let* ((identity-length (read-byte stream))
-         (identity (make-array identity-length :element-type '(unsigned-byte 8))))
-    (assert (= (read-sequence identity stream) identity-length))
-    (values identity identity-length)))
+  (let ((final-short (make-array 2 :element-type '(unsigned-byte 8))))
+	(assert (= (read-sequence final-short stream) 2) 
+			nil 'invalid-identity-error)
+	(assert (zerop (aref final-short 0)) nil 'invalid-identity-error)
+	(let* ((identity-length (aref final-short 1))
+		   (identity (make-array identity-length 
+								 :element-type '(unsigned-byte 8))))
+	  (assert (= (read-sequence identity stream) identity-length)
+			  nil 'invalid-identity-error)
+	  (values identity identity-length))))
 
 (defun read-frame (stream)
   (let* ((flags (read-byte stream))
