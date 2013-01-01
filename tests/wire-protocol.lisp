@@ -4,7 +4,7 @@
 (in-suite :wire-protocol-tests)
 
 (def-fixture dummy-out-stream ()
-  (flexi-streams:with-output-to-sequence (stream)
+  (flexi-streams:with-output-to-sequence (stream :element-type '(unsigned-byte 8))
     (&body)))
 
 (def-fixture dummy-in-stream (sequence)
@@ -42,6 +42,12 @@
     (with-fixture dummy-out-stream ()
       (nilmq::write-signature stream 256))))
 
+(test :write-no-interop-signature
+  "Write signature for no legacy interop"
+  (is (equalp (with-fixture dummy-out-stream ()
+                (nilmq::write-no-interop-signature stream))
+              #(#xff 0 0 0 0 0 0 0 0 #x7f))))
+
 (test :write-revision-and-socket-type-with-valid-socket-id
   "Writes revision and socket type using a valid socket id"
   (is (equalp (with-fixture dummy-out-stream ()
@@ -52,9 +58,33 @@
 
 (test :write-revision-and-socket-type-with-invalid-socket-id
   "Writes revision and socket type using a invalid socket id"
-  (signals nilmq::invalid-socket-id-error
+  (signals nilmq::invalid-socket-type-id-error
     (with-fixture dummy-out-stream ()
       (nilmq::write-revision-and-socket-type stream nilmq::*protocol-revision* -1))))
+
+(test :write-zero-length-identity
+  "Write zero length identity"
+  (is (equalp (with-fixture dummy-out-stream ()
+                (nilmq::write-identity stream #()))
+              #(0 0))))
+
+(test :write-nil-identity
+  "Write nil identity"
+  (is (equalp (with-fixture dummy-out-stream ()
+                (nilmq::write-identity stream nil))
+              #(0 0))))
+
+(test :write-non-zero-length-identity
+  "Write none zero length identity"
+  (is (equalp (with-fixture dummy-out-stream ()
+                (nilmq::write-identity stream #(255 255)))
+              #(0 2 255 255))))
+
+(test :write-greater-than-max-length-identity
+  "Write greater than the maximum identity length"
+  (signals nilmq::invalid-identity-length-error
+    (with-fixture dummy-out-stream ()
+      (nilmq::write-identity stream (make-array 256 :element-type '(unsigned-byte 8))))))
 
 (test :write-frame-with-nil-body
   "Write frame with nil body"
@@ -163,11 +193,11 @@
     (with-fixture dummy-in-stream (#(#xff 0 0 0 0 0 0 2 0 #x7f))
       (nilmq::read-signature stream))))
 
-(test :read-signature-with-invalid-identity-length-of-zero
-  "Read signature with invalid identity length of zero"
-  (signals nilmq::invalid-signature-error
-    (with-fixture dummy-in-stream (#(#xff 0 0 0 0 0 0 0 0 #x7f))
-      (nilmq::read-signature stream))))
+(test :read-signature-with-identity-length-of-zero
+  "Read signature with identity length of zero"
+  (is (equalp (with-fixture dummy-in-stream (#(#xff 0 0 0 0 0 0 0 0 #x7f))
+                (nilmq::read-signature stream))
+              #(#xff 0 0 0 0 0 0 0 0 #x7f))))
 
 (test :read-signature-with-invalid-lead-octet
   "Read signature with invalid lead octet (#xFF)"
@@ -310,3 +340,61 @@
   (signals nilmq::invalid-frame-error
     (with-fixture dummy-in-stream (#(#xfc 1 #xff))
       (nilmq::read-frame stream))))
+
+(test :make-socket-req-type-with-no-identity-default-revision
+  "Make socket with *req* type id, no identity and default protocol revision"
+  (let ((socket (nilmq::make-socket nilmq::*req*)))
+    (is (null (nilmq::id socket)))
+    (is (= (slot-value socket 'nilmq::type-id) nilmq::*req*))
+    (is (= (slot-value socket 'nilmq::protocol-revision) nilmq::*protocol-revision*))))
+
+(test :send-greeting-of-no-identity-socket
+  "Sending greeting for socket with no identity"
+  (let ((socket (nilmq::make-socket nilmq::*req*)))
+    (is (equalp (with-fixture dummy-out-stream ()
+                  (nilmq::send-greeting socket stream))
+                #(#xff 0 0 0 0 0 0 0 0 #x7f
+                  1 3
+                  0 0)))))
+
+(test :send-greeting-of-with-identity
+  "Sending greeting for socket with identity"
+  (let ((socket (nilmq::make-socket nilmq::*req* #(255 255))))
+    (is (equalp (with-fixture dummy-out-stream ()
+                  (nilmq::send-greeting socket stream))
+                #(#xff 0 0 0 0 0 0 0 0 #x7f
+                  1 3
+                  0 2 255 255)))))
+
+(test :receive-greeting-for-req/rep-with-no-identity
+  "Receive greeting for REQ/REP sockets with no identity"
+  (let ((socket (nilmq::make-socket nilmq::*req*))
+        (greeting (make-array 14 :element-type '(unsigned-byte 8)
+                              :initial-contents '(#xff 0 0 0 0 0 0 0 0 #x7f
+                                                  1 4
+                                                  0 0))))
+    (is (equalp (with-fixture dummy-in-stream (greeting)
+                  (nilmq::receive-greeting socket stream))
+                #()))))
+
+(test :receive-greeting-for-req/rep-with-identity
+  "Receive greeting for REQ/REP sockets with identity"
+  (let ((socket (nilmq::make-socket nilmq::*req*))
+        (greeting (make-array 16 :element-type '(unsigned-byte 8)
+                              :initial-contents '(#xff 0 0 0 0 0 0 0 0 #x7f
+                                                  1 4
+                                                  0 2 255 255))))
+    (is (equalp (with-fixture dummy-in-stream (greeting)
+                  (nilmq::receive-greeting socket stream))
+                #(255 255)))))
+
+(test :receive-greeting-with-invalid-socket-type-combination
+  "Receive greeting with invalid socket type combination"
+  (let ((socket (nilmq::make-socket nilmq::*req*))
+        (greeting (make-array 16 :element-type '(unsigned-byte 8)
+                              :initial-contents '(#xff 0 0 0 0 0 0 0 0 #x7f
+                                                  1 5
+                                                  0 2 255 255))))
+    (signals nilmq::invalid-socket-type-pattern-error
+      (with-fixture dummy-in-stream (greeting)
+        (nilmq::receive-greeting socket stream)))))
